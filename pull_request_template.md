@@ -15,14 +15,14 @@ Lo que no aplique, se borra. Guía completa: kuntur-docs/proceso/flujo-de-trabaj
 ## Criterios de aceptación
 
 <!--
-Un criterio por fila, copiado de la spec. "Cómo se verifica": el test (unitario, API o E2E),
-"manual" con el motivo, o "n/a" con el enlace al PR del otro repo que lo cubre.
+Un criterio por fila, copiado de la spec. "Cubierto": sí, no o n/a.
+"Cómo se verifica": el test (unitario, API o E2E), "manual" con el motivo, o el enlace al PR del otro repo que lo cubre.
 Si la historia toca varios repos, la tabla completa va en el PR principal y los demás ponen "n/a" con el enlace.
 -->
 
 | Criterio | Cubierto | Cómo se verifica |
 |---|---|---|
-| CA-1: … | [ ] | |
+| CA-1: … | sí | |
 
 ## Cómo probarlo
 
@@ -30,9 +30,9 @@ Si la historia toca varios repos, la tabla completa va en el PR principal y los 
 
 ## Despliegue
 
-<!-- Borra lo que no aplique. -->
+<!-- Marca lo que aplique y borra el resto: las casillas que queden sin marcar cuentan como tareas pendientes del PR. -->
 
-- [ ] No necesita nada especial: se despliega solo con el merge.
+- [ ] Nada especial: el merge despliega en dev, y STG y PRD van por release, como siempre.
 - [ ] Orden entre repos: <!-- p. ej. primero la lambda, después el Admin -->
 - [ ] Ruta nueva: está en el router, en el stack CDK (`infra/`) y en el authorizer.
 - [ ] Cambio de base de datos: la migración está en el repo de migraciones y se despliega antes.

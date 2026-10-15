@@ -4,8 +4,9 @@
 //
 // Una rama cuenta como integrada si:
 //   - no tiene commits que no estén en la rama principal (merge normal o rama sin cambios), o
-//   - su PR se integró (squash) y la rama no tiene commits posteriores a ese PR.
-// Nunca se borra la rama principal, una rama con un PR abierto ni una rama con trabajo sin integrar.
+//   - su PR se integró (squash) en la rama principal y la rama no tiene commits posteriores a ese PR.
+// Nunca se borra la rama principal, una rama protegida, una rama con un PR abierto (desde ella o hacia
+// ella) ni una rama con trabajo sin integrar. Antes de borrar, se comprueba que nadie hizo push desde el informe.
 //
 // Requiere `gh` con sesión iniciada y permiso de escritura en el repo (solo para --borrar).
 // Uso:
@@ -38,7 +39,11 @@ for (const rama of ramas) {
   const sha = rama.commit.sha;
   const suyos = prs.filter((pr) => pr.head.ref === rama.name && pr.head.repo?.full_name === `${ORG}/${repo}`);
   const abierto = suyos.find((pr) => pr.state === 'open');
-  const integradoEnSha = suyos.find((pr) => pr.merged_at && pr.head.sha === sha);
+  // Un PR abierto que apunta a esta rama se cerraría al borrarla (PRs apilados).
+  const baseDeAbierto = prs.find((pr) => pr.state === 'open' && pr.base.ref === rama.name);
+  // Solo cuenta un PR integrado en la rama principal: integrado en otra rama, su trabajo puede no estar en main.
+  const enPrincipal = suyos.filter((pr) => pr.merged_at && pr.base.ref === principal);
+  const integradoEnSha = enPrincipal.find((pr) => pr.head.sha === sha);
 
   let estado;
   let motivo;
@@ -46,6 +51,8 @@ for (const rama of ramas) {
     [estado, motivo] = ['conservar', 'rama protegida'];
   } else if (abierto) {
     [estado, motivo] = ['conservar', `PR abierto #${abierto.number}`];
+  } else if (baseDeAbierto) {
+    [estado, motivo] = ['conservar', `base del PR abierto #${baseDeAbierto.number}`];
   } else if (integradoEnSha) {
     [estado, motivo] = ['integrada', `PR #${integradoEnSha.number} integrado`];
   } else {
@@ -54,7 +61,7 @@ for (const rama of ramas) {
     );
     if (adelante === 0) [estado, motivo] = ['integrada', `sin commits fuera de ${principal}`];
     else {
-      const integrado = suyos.find((pr) => pr.merged_at);
+      const integrado = enPrincipal[0];
       const cerrado = suyos.find((pr) => pr.state === 'closed' && !pr.merged_at);
       motivo = integrado
         ? `${adelante} commits después de integrar el PR #${integrado.number}`
@@ -64,7 +71,7 @@ for (const rama of ramas) {
       estado = 'conservar';
     }
   }
-  filas.push({ rama: rama.name, estado, motivo });
+  filas.push({ rama: rama.name, sha, estado, motivo });
 }
 
 console.log(['rama', 'estado', 'motivo'].join('\t'));
@@ -77,13 +84,25 @@ console.error(
 );
 
 if (borrar) {
+  let borradas = 0;
   for (const f of integradas) {
     const ref = f.rama.split('/').map(encodeURIComponent).join('/');
-    execFileSync('gh', ['api', '-X', 'DELETE', `repos/${ORG}/${repo}/git/refs/heads/${ref}`], {
-      stdio: 'ignore',
-    });
-    console.error(`borrada: ${f.rama}`);
+    try {
+      // Si alguien hizo push desde el informe, la rama tiene trabajo nuevo: no se toca.
+      if (gh(`repos/${ORG}/${repo}/git/ref/heads/${ref}`).object.sha !== f.sha) {
+        console.error(`conservada (cambió desde el informe): ${f.rama}`);
+        continue;
+      }
+      execFileSync('gh', ['api', '-X', 'DELETE', `repos/${ORG}/${repo}/git/refs/heads/${ref}`], {
+        stdio: 'ignore',
+      });
+      borradas++;
+      console.error(`borrada: ${f.rama}`);
+    } catch (err) {
+      console.error(`error con ${f.rama}: ${err.message.split('\n')[0]}`);
+    }
   }
+  console.error(`${borradas} de ${integradas.length} ramas integradas borradas.`);
 } else if (integradas.length) {
   console.error('Solo informe. Para borrar las integradas: añade --borrar.');
 }
